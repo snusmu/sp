@@ -19,33 +19,23 @@ int heuristic(const int from, const int to, const int mapWidth) {
 int ida(int** matrix, const int node, const int end, int currentCost,
         const int max, int* visited, const int mapWidth) {
   int cost = currentCost + heuristic(node, end, mapWidth);
-  if (cost > max) {
-    return cost;
-  }
-  if (end == visited[currentCost - 1]) {
-    return currentCost;
-  }
+  if (cost > max) return cost; 
+  if (end == visited[currentCost - 1]) return currentCost;
   int min = -1;
   for (int i = 0; i < 4; i++) {
     if (matrix[node][i] == -1) continue;
     bool been = false;
-    for (int j = 0; j < currentCost; j++) {
+    for (int j = 0; j < currentCost; j++) 
       if (matrix[node][i] == visited[j]) {
         been = true;
         break;
       }
-    }
     if (been) continue;
     visited[currentCost] = matrix[node][i];
-    int pos = (ida(matrix, matrix[node][i], end, currentCost + 1, max, visited,
-                   mapWidth));
+    int pos = (ida(matrix, matrix[node][i], end, currentCost + 1, max, visited, mapWidth));
     if (pos == -1) continue;
-    if (visited[pos - 1] == end) {
-      return pos;
-    }
-    if ((min == -1) || (pos < min)) {
-      min = pos;
-    }
+    if (visited[pos - 1] == end) return pos;
+    if ((min == -1) || (pos < min)) min = pos;
   }
   return min;
 }
@@ -63,23 +53,22 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
     // bottom -> 2
     matrix[i] = new int[4];
     for (int j = 0; j < 4; j++) matrix[i][j] = -1;  // -1 is unavailable
-    if (pMap[i] != 1) {
-      continue;
-    }
-    if ((i >= nMapWidth) && (pMap[i - nMapWidth] == 1))
-      matrix[i][0] = i - nMapWidth;
+    if (pMap[i] != 1) continue;
+    if ((i >= nMapWidth) && (pMap[i - nMapWidth] == 1)) matrix[i][0] = i - nMapWidth;
     if (((i + 1) % nMapWidth != 0) && (pMap[i + 1] == 1)) matrix[i][1] = i + 1;
-    if ((i < mapFieldCount - nMapWidth) && (pMap[i + nMapWidth] == 1))
-      matrix[i][2] = i + nMapWidth;
+    if ((i < mapFieldCount - nMapWidth) && (pMap[i + nMapWidth] == 1)) matrix[i][2] = i + nMapWidth;
     if ((i % nMapWidth != 0) && (pMap[i - 1] == 1)) matrix[i][3] = i - 1;
   }
   int start = nStartY * nMapWidth + nStartX;
   int end = nTargetY * nMapWidth + nTargetX;
-  if (start == end) return -1;
-  int max = 0;
-  while (max < nOutBufferSize) {
+  int max = -1;
+  while (true) {
     max = ida(matrix, start, end, 0, max, pOutBuffer, nMapWidth);
-    if (max == -1) break;
+    if (max <= 0) break;
+    if (max > nOutBufferSize){
+      max = -1;
+      break;
+    }
     if (pOutBuffer[max - 1] == end) break;
   }
   delete matrix;

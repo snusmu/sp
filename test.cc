@@ -21,7 +21,7 @@ int main(){
   cout << "EXAMPLE 1\n";
   unsigned char pMap[] = {
     1, 1, 1, 1, 
-    1, 1, 0, 1, 
+    0, 0, 0, 0, 
     1, 1, 1, 1
   };
   int pOutBuffer[30];
