@@ -15,14 +15,24 @@ public:
   Node *pPrevious;
   vector<Node *> rgNeighbors;
   vector<int> rgEdges;
-  Node(const int nIndex, const int nMapWidth);
+  Node(const int x, const int y);
+  Node(const int x, const int y, Node *pTarget);
   int GetDistance(Node *pTarget, const unsigned char *pMap,
                   const int nMapWidth);
   int IdaStar(Node *pTarget, int nCost, const int nBound);
-  void SetHeuristic(Node *pTarget);
   void FillPathTo(Node *pTarget, int *pOutBuffer, const int nMapWidth);
   void PrintPath();
 };
+
+void Node::PrintPath() {
+  cout << nX << "," << nY << "->";
+  if (pPrevious == NULL) {
+    cout << "\n";
+    return;
+  }
+  pPrevious->PrintPath();
+  return;
+}
 
 bool SortByDistanceToTarget(Node *pNode1, Node *pNode2) {
   return ((pNode2->nToTarget != -1) && (pNode1->nToTarget > pNode2->nToTarget));
@@ -34,11 +44,19 @@ Node::Node(const int x, const int y) {
   bOpen = false;
   nToTarget = -1;
   nToStart = -1;
+  nHeuristic = 0;
   nX = x;
   nY = y;
 }
 
-void Node::SetHeuristic(Node *pTarget) {
+Node::Node(const int x, const int y, Node *pTarget) {
+  pPrevious = NULL;
+  bClosed = false;
+  bOpen = false;
+  nToTarget = -1;
+  nToStart = -1;
+  nX = x;
+  nY = y;
   nHeuristic = abs(pTarget->nY - nY) + abs(pTarget->nX - nX);
 }
 
@@ -94,7 +112,6 @@ void Node::FillPathTo(Node *pTarget, int *pOutBuffer, const int nMapWidth) {
   } else {
     nModX = 1;
   }
-  // has to be same as GetDistance check
   for (int i = nX; i != pPrevious->nX; i = i + nModX) {
     nBound--;
     pOutBuffer[nBound] = nY * nMapWidth + i;
@@ -126,8 +143,8 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
   // now collecting rgKeypoints for visibility graph
   // done by finding corners. could be optimized..
   vector<Node *> rgKeypoints;
-  Node *pStart = new Node(nStartX, nStartY);
   Node *pTarget = new Node(nTargetX, nTargetY);
+  Node *pStart = new Node(nStartX, nStartY, pTarget);
   rgKeypoints.push_back(pStart);
   rgKeypoints.push_back(pTarget);
   for (int y = 0; y < nMapHeight; y++) {
@@ -142,22 +159,7 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
           isCorner(x, y, x + 1, y - 1, pMap, nMapWidth, nMapHeight) ||
           isCorner(x, y, x + 1, y + 1, pMap, nMapWidth, nMapHeight) ||
           isCorner(x, y, x - 1, y + 1, pMap, nMapWidth, nMapHeight)) {
-        rgKeypoints.push_back(new Node(x, y));
-      }
-    }
-  }
-  // visual graph for a*
-  for (int i = 0; i < rgKeypoints.size(); i++) {
-    Node *pFrom = rgKeypoints[i];
-    pFrom->SetHeuristic(pTarget);
-    for (int j = 0; j < rgKeypoints.size(); j++) {
-      if (j == i)
-        continue;
-      Node *pTo = rgKeypoints[j];
-      int nDistance = pFrom->GetDistance(pTo, pMap, nMapWidth);
-      if (nDistance > 0) {
-        pFrom->rgNeighbors.push_back(pTo);
-        pFrom->rgEdges.push_back(nDistance);
+        rgKeypoints.push_back(new Node(x, y, pTarget));
       }
     }
   }
@@ -180,21 +182,24 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
     rgOpen.pop_back();
     pCurrent->bOpen = false;
     pCurrent->bClosed = true;
-    for (int i = 0; i < pCurrent->rgNeighbors.size(); i++) {
-      Node *pNeighbor = pCurrent->rgNeighbors[i];
+    for (int i = 0; i < rgKeypoints.size(); i++) {
+      Node *pNeighbor = rgKeypoints[i];
       if (pNeighbor->bClosed)
         continue;
-      int nScore = pCurrent->nToStart + pCurrent->rgEdges[i];
+      int nToCurrent = pCurrent->GetDistance(pNeighbor, pMap, nMapWidth);
+      if (nToCurrent == -1)
+        continue;
+      int nToStart = pCurrent->nToStart + nToCurrent;
       if (!pNeighbor->bOpen) {
         pNeighbor->bOpen = true;
         rgOpen.push_back(pNeighbor);
       } else if ((pNeighbor->nToStart == -1) ||
-                 (nScore >= pNeighbor->nToStart)) {
+                 (nToStart >= pNeighbor->nToStart)) {
         continue;
       }
       pNeighbor->pPrevious = pCurrent;
-      pNeighbor->nToStart = nScore;
-      pNeighbor->nToTarget = nScore + pNeighbor->nHeuristic;
+      pNeighbor->nToStart = nToStart;
+      pNeighbor->nToTarget = nToStart + pNeighbor->nHeuristic;
     }
   }
   return -1;
