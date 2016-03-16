@@ -3,13 +3,13 @@
 #include <stdlib.h>
 #include <iostream>
 #include <vector>
-#include <algorithm>
+#include <queue>
 using namespace std;
 
 class Node {
   int nX, nY;
 
-public:
+ public:
   bool bClosed, bOpen;
   int nToStart, nToTarget, nHeuristic;
   Node *pPrevious;
@@ -19,8 +19,8 @@ public:
   Node(const int x, const int y, Node *pTarget);
   int GetDistance(Node *pTarget, const unsigned char *pMap,
                   const int nMapWidth);
-  int IdaStar(Node *pTarget, int nCost, const int nBound);
   void FillPathTo(Node *pTarget, int *pOutBuffer, const int nMapWidth);
+  void init(const int x, const int y);
   void PrintPath();
 };
 
@@ -34,11 +34,14 @@ void Node::PrintPath() {
   return;
 }
 
-bool SortByDistanceToTarget(Node *pNode1, Node *pNode2) {
-  return ((pNode2->nToTarget != -1) && (pNode1->nToTarget > pNode2->nToTarget));
-}
+struct ByDistanceToTarget {
+  bool operator()(Node *pNode1, Node *pNode2) {
+    return ((pNode2->nToTarget != -1) &&
+            (pNode1->nToTarget > pNode2->nToTarget));
+  }
+};
 
-Node::Node(const int x, const int y) {
+void Node::init(const int x, const int y) {
   pPrevious = NULL;
   bClosed = false;
   bOpen = false;
@@ -49,14 +52,10 @@ Node::Node(const int x, const int y) {
   nY = y;
 }
 
+Node::Node(const int x, const int y) { init(x, y); }
+
 Node::Node(const int x, const int y, Node *pTarget) {
-  pPrevious = NULL;
-  bClosed = false;
-  bOpen = false;
-  nToTarget = -1;
-  nToStart = -1;
-  nX = x;
-  nY = y;
+  init(x, y);
   nHeuristic = abs(pTarget->nY - nY) + abs(pTarget->nX - nX);
 }
 
@@ -77,20 +76,14 @@ int Node::GetDistance(Node *pTarget, const unsigned char *pMap,
   // return -1 if single 0 is found on the simple path
   // that always means there's keypoint somewhere in the way.
   for (int i = nY; i != pTarget->nY; i = i + nModY) {
-    if (pMap[nMapWidth * i + nX] == 0)
-      return -1;
-    if (nX == pTarget->nX)
-      continue;
-    if (pMap[nMapWidth * i + pTarget->nX] == 0)
-      return -1;
+    if (pMap[nMapWidth * i + nX] == 0) return -1;
+    if (nX == pTarget->nX) continue;
+    if (pMap[nMapWidth * i + pTarget->nX] == 0) return -1;
   }
   for (int i = nX; i != pTarget->nX; i = i + nModX) {
-    if (pMap[nY * nMapWidth + i] == 0)
-      return -1;
-    if (nY == pTarget->nY)
-      continue;
-    if (pMap[pTarget->nY * nMapWidth + i] == 0)
-      return -1;
+    if (pMap[nY * nMapWidth + i] == 0) return -1;
+    if (nY == pTarget->nY) continue;
+    if (pMap[pTarget->nY * nMapWidth + i] == 0) return -1;
   }
   return abs(nY - pTarget->nY) + abs(nX - pTarget->nX);
 }
@@ -138,8 +131,7 @@ bool isCorner(const int nX, const int nY, const int nCornerX,
 int FindPath(const int nStartX, const int nStartY, const int nTargetX,
              const int nTargetY, const unsigned char *pMap, const int nMapWidth,
              const int nMapHeight, int *pOutBuffer, const int nOutBufferSize) {
-  if (nStartX == nTargetX && nStartY == nTargetY)
-    return 0;
+  if (nStartX == nTargetX && nStartY == nTargetY) return 0;
   // now collecting rgKeypoints for visibility graph
   // done by finding corners. could be optimized..
   vector<Node *> rgKeypoints;
@@ -150,11 +142,10 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
   for (int y = 0; y < nMapHeight; y++) {
     for (int x = 0; x < nMapWidth; x++) {
       if ((x == nStartX && y == nStartY) || (x == nTargetX && y == nTargetY)) {
-        continue; // already added
+        continue;  // already added
       }
       int i = y * nMapWidth + x;
-      if (pMap[i] == 0)
-        continue; // skip unavailable
+      if (pMap[i] == 0) continue;  // skip unavailable
       if (isCorner(x, y, x - 1, y - 1, pMap, nMapWidth, nMapHeight) ||
           isCorner(x, y, x + 1, y - 1, pMap, nMapWidth, nMapHeight) ||
           isCorner(x, y, x + 1, y + 1, pMap, nMapWidth, nMapHeight) ||
@@ -163,43 +154,42 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
       }
     }
   }
-  // a*
-  vector<Node *> rgOpen;
+  // ida*
+  priority_queue<Node *, vector<Node *>, ByDistanceToTarget> rgOpen;
   pStart->nToStart = 0;
   pStart->nToTarget = pStart->nHeuristic;
   pStart->bOpen = true;
-  rgOpen.push_back(pStart);
+  rgOpen.push(pStart);
+  int nToStart, nToCurrent, nToTarget;
   while (rgOpen.size() > 0) {
-    sort(rgOpen.begin(), rgOpen.end(), SortByDistanceToTarget);
-    Node *pCurrent = rgOpen.back();
+    Node *pCurrent = rgOpen.top();
     if (pCurrent == pTarget) {
       pTarget->FillPathTo(pStart, pOutBuffer, nMapWidth);
       return pTarget->nToStart;
     }
-    if (pCurrent->nToTarget > nOutBufferSize) {
-      break;
-    }
-    rgOpen.pop_back();
+    rgOpen.pop();
     pCurrent->bOpen = false;
     pCurrent->bClosed = true;
     for (int i = 0; i < rgKeypoints.size(); i++) {
       Node *pNeighbor = rgKeypoints[i];
-      if (pNeighbor->bClosed)
-        continue;
-      int nToCurrent = pCurrent->GetDistance(pNeighbor, pMap, nMapWidth);
-      if (nToCurrent == -1)
-        continue;
-      int nToStart = pCurrent->nToStart + nToCurrent;
+      if (pNeighbor->bClosed) continue;  // checked already
+      nToCurrent = pCurrent->GetDistance(pNeighbor, pMap, nMapWidth);
+      if (nToCurrent == -1) continue;  // not a neighbour
+      nToStart = pCurrent->nToStart + nToCurrent;
+      nToTarget = nToStart + pNeighbor->nHeuristic;
+      if (nToTarget > nOutBufferSize) {
+        continue;  // dont close, we might encounter it again
+      }
       if (!pNeighbor->bOpen) {
+        pNeighbor->nToTarget = nToTarget;
         pNeighbor->bOpen = true;
-        rgOpen.push_back(pNeighbor);
+        rgOpen.push(pNeighbor);
       } else if ((pNeighbor->nToStart == -1) ||
                  (nToStart >= pNeighbor->nToStart)) {
         continue;
       }
       pNeighbor->pPrevious = pCurrent;
       pNeighbor->nToStart = nToStart;
-      pNeighbor->nToTarget = nToStart + pNeighbor->nHeuristic;
     }
   }
   return -1;
