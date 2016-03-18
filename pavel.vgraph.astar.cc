@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <queue>
+#include <string>
 using namespace std;
 
 class Node {
@@ -21,17 +22,17 @@ class Node {
                   const int nMapWidth);
   void FillPathTo(Node *pTarget, int *pOutBuffer, const int nMapWidth);
   void init(const int x, const int y);
-  void PrintPath();
+  string GetPath();
+  string ToString();
 };
 
-void Node::PrintPath() {
-  cout << nX << "," << nY << "->";
+string Node::ToString() { return to_string(nX) + "," + to_string(nY); }
+
+string Node::GetPath() {
   if (pPrevious == NULL) {
-    cout << "\n";
-    return;
+    return "";
   }
-  pPrevious->PrintPath();
-  return;
+  return pPrevious->GetPath() + "->" + ToString();
 }
 
 struct ByDistanceToTarget {
@@ -170,24 +171,42 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
     rgOpen.pop();
     pCurrent->bOpen = false;
     pCurrent->bClosed = true;
+    cout << pCurrent->GetPath() << "(" << pCurrent->nToStart << ",size"
+         << rgOpen.size() << ")" << endl;
     for (int i = 0; i < rgKeypoints.size(); i++) {
       Node *pNeighbor = rgKeypoints[i];
-      if (pNeighbor->bClosed) continue;  // checked already
+      if (pNeighbor->bClosed) {
+        cout << "checked already" << pNeighbor->ToString() << endl;
+        continue;  // checked already
+      }
       nToCurrent = pCurrent->GetDistance(pNeighbor, pMap, nMapWidth);
-      if (nToCurrent == -1) continue;  // not a neighbour
+      if (nToCurrent == -1) {
+        continue;  // not a neighbour
+      }
       nToStart = pCurrent->nToStart + nToCurrent;
       nToTarget = nToStart + pNeighbor->nHeuristic;
       if (nToTarget > nOutBufferSize) {
+        cout << "distance to target too high (" << nToTarget
+             << ") for:" << pNeighbor->ToString() << endl;
         continue;  // dont close, we might encounter it again
       }
       if (!pNeighbor->bOpen) {
+        cout << "adding node:" << pNeighbor->ToString()
+             << "distance to start is " << nToStart << ", total is "
+             << nToTarget << endl;
         pNeighbor->nToTarget = nToTarget;
         pNeighbor->bOpen = true;
         rgOpen.push(pNeighbor);
       } else if ((pNeighbor->nToStart == -1) ||
                  (nToStart >= pNeighbor->nToStart)) {
+        cout << "distance to start too high (" << nToStart
+             << ") for :" << pNeighbor->ToString() << endl;
         continue;
       }
+      cout << "updating node " << pNeighbor->ToString()
+           << " distance to start to " << nToStart << ", total is " << nToTarget
+           << endl;
+      pNeighbor->nToTarget = nToTarget;
       pNeighbor->pPrevious = pCurrent;
       pNeighbor->nToStart = nToStart;
     }
