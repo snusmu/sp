@@ -171,12 +171,9 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
     rgOpen.pop();
     pCurrent->bOpen = false;
     pCurrent->bClosed = true;
-    cout << pCurrent->GetPath() << "(" << pCurrent->nToStart << ",size"
-         << rgOpen.size() << ")" << endl;
     for (int i = 0; i < rgKeypoints.size(); i++) {
       Node *pNeighbor = rgKeypoints[i];
       if (pNeighbor->bClosed) {
-        cout << "checked already" << pNeighbor->ToString() << endl;
         continue;  // checked already
       }
       nToCurrent = pCurrent->GetDistance(pNeighbor, pMap, nMapWidth);
@@ -186,29 +183,19 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
       nToStart = pCurrent->nToStart + nToCurrent;
       nToTarget = nToStart + pNeighbor->nHeuristic;
       if (nToTarget > nOutBufferSize) {
-        cout << "distance to target too high (" << nToTarget
-             << ") for:" << pNeighbor->ToString() << endl;
         continue;  // dont close, we might encounter it again
       }
-      if (!pNeighbor->bOpen) {
-        cout << "adding node:" << pNeighbor->ToString()
-             << "distance to start is " << nToStart << ", total is "
-             << nToTarget << endl;
-        pNeighbor->nToTarget = nToTarget;
-        pNeighbor->bOpen = true;
-        rgOpen.push(pNeighbor);
-      } else if ((pNeighbor->nToStart == -1) ||
-                 (nToStart >= pNeighbor->nToStart)) {
-        cout << "distance to start too high (" << nToStart
-             << ") for :" << pNeighbor->ToString() << endl;
+      if (pNeighbor->bOpen &&
+          ((pNeighbor->nToStart == -1) || (nToStart >= pNeighbor->nToStart))) {
         continue;
       }
-      cout << "updating node " << pNeighbor->ToString()
-           << " distance to start to " << nToStart << ", total is " << nToTarget
-           << endl;
       pNeighbor->nToTarget = nToTarget;
       pNeighbor->pPrevious = pCurrent;
       pNeighbor->nToStart = nToStart;
+      if (!pNeighbor->bOpen) {
+        pNeighbor->bOpen = true;
+        rgOpen.push(pNeighbor);
+      }
     }
   }
   return -1;
