@@ -31,11 +31,12 @@ void SetEdges(const unsigned char *pMap, const int nMapWidth,
               vector<Node *> *rgKeypoints, const int nFrom, const int nTo) {
   for (int i = nFrom; i < nTo; i++) {
     Node *pFrom = (*rgKeypoints)[i];
-    for (int j = 0; j < rgKeypoints->size(); j++) {
-      if (j == i) continue;
+    for (int j = i + 1; j < rgKeypoints->size(); j++) {
       Node *pTo = (*rgKeypoints)[j];
       int nDistance = pFrom->GetDistance(pTo, pMap, nMapWidth);
       if (nDistance > 0) {
+        pTo->rgNeighbors.push_back(pFrom);
+        pTo->rgEdges.push_back(nDistance);
         pFrom->rgNeighbors.push_back(pTo);
         pFrom->rgEdges.push_back(nDistance);
       }
@@ -176,6 +177,7 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
     }
   }
   int nThreads = thread::hardware_concurrency();
+  /*
   // min ~ 50 vertices per thread
   if (rgKeypoints.size() / 50 < nThreads) {
     nThreads = rgKeypoints.size() / 50 + 1;
@@ -196,6 +198,9 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
   for (int i = 0; i < nThreads; i++) {
     rgThreads[i].join();
   }
+  */
+  thread t(SetEdges, pMap, nMapWidth, &rgKeypoints, 0, rgKeypoints.size());
+  t.join();
   // ida*
   vector<Node *> rgOpen;
   pStart->nToStart = 0;
