@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <vector>
-#include <queue>
+#include <algorithm>
 #include <string>
 #include <thread>
 using namespace std;
@@ -28,12 +28,12 @@ class Node {
 };
 
 void SetEdges(const unsigned char *pMap, const int nMapWidth,
-              vector<Node *> rgKeypoints, const int nFrom, const int nTo) {
+              vector<Node *> *rgKeypoints, const int nFrom, const int nTo) {
   for (int i = nFrom; i < nTo; i++) {
-    Node *pFrom = rgKeypoints[i];
-    for (int j = 0; j < rgKeypoints.size(); j++) {
+    Node *pFrom = (*rgKeypoints)[i];
+    for (int j = 0; j < rgKeypoints->size(); j++) {
       if (j == i) continue;
-      Node *pTo = rgKeypoints[j];
+      Node *pTo = (*rgKeypoints)[j];
       int nDistance = pFrom->GetDistance(pTo, pMap, nMapWidth);
       if (nDistance > 0) {
         pFrom->rgNeighbors.push_back(pTo);
@@ -175,20 +175,25 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
       }
     }
   }
-  int nMaxThreads = thread::hardware_concurrency();
-  if (rgKeypoints.size() / 50 < nMaxThreads) {
-    nMaxThreads = rgKeypoints.size() / 50 + 1;
+  int nThreads = thread::hardware_concurrency();
+  // min ~ 50 vertices per thread
+  if (rgKeypoints.size() / 50 < nThreads) {
+    nThreads = rgKeypoints.size() / 50 + 1;
   }
-  vector<thread> rgThreads(nMaxThreads);
-  int nVerticesPerThread = rgKeypoints.size() / nMaxThreads;
-  for (int i = 0; i < nMaxThreads - 1; i++) {
-    rgThreads[i] = thread(SetEdges, pMap, nMapWidth, rgKeypoints,
+  // always run at least one
+  if (nThreads < 1) {
+    nThreads = 1;
+  }
+  vector<thread> rgThreads(nThreads);
+  int nVerticesPerThread = rgKeypoints.size() / nThreads;
+  for (int i = 0; i < nThreads - 1; i++) {
+    rgThreads[i] = thread(SetEdges, pMap, nMapWidth, &rgKeypoints,
                           i * nVerticesPerThread, (i + 1) * nVerticesPerThread);
   }
-  rgThreads[nMaxThreads - 1] =
-      thread(SetEdges, pMap, nMapWidth, rgKeypoints,
-             (nMaxThreads - 1) * nVerticesPerThread, rgKeypoints.size());
-  for (int i = 0; i < nMaxThreads; i++) {
+  rgThreads[nThreads - 1] =
+      thread(SetEdges, pMap, nMapWidth, &rgKeypoints,
+             (nThreads - 1) * nVerticesPerThread, rgKeypoints.size());
+  for (int i = 0; i < nThreads; i++) {
     rgThreads[i].join();
   }
   // ida*
