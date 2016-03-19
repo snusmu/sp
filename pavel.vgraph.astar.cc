@@ -22,14 +22,14 @@ class Node {
   int GetDistance(Node *pTarget, const unsigned char *pMap,
                   const int nMapWidth);
   void FillPathTo(Node *pTarget, int *pOutBuffer, const int nMapWidth);
-  void init(const int x, const int y);
+  void Init(const int x, const int y);
   string GetPath();
   string ToString();
 };
 
-void setEdges(const unsigned char *pMap, const int nMapWidth,
-              vector<Node *> rgKeypoints, const int a, const int b) {
-  for (int i = a; i < b; i++) {
+void SetEdges(const unsigned char *pMap, const int nMapWidth,
+              vector<Node *> rgKeypoints, const int nFrom, const int nTo) {
+  for (int i = nFrom; i < nTo; i++) {
     Node *pFrom = rgKeypoints[i];
     for (int j = 0; j < rgKeypoints.size(); j++) {
       if (j == i) continue;
@@ -62,7 +62,7 @@ struct ByDistanceToTarget {
   }
 };
 
-void Node::init(const int x, const int y) {
+void Node::Init(const int x, const int y) {
   pPrevious = NULL;
   bClosed = false;
   bOpen = false;
@@ -73,10 +73,10 @@ void Node::init(const int x, const int y) {
   nY = y;
 }
 
-Node::Node(const int x, const int y) { init(x, y); }
+Node::Node(const int x, const int y) { Init(x, y); }
 
 Node::Node(const int x, const int y, Node *pTarget) {
-  init(x, y);
+  Init(x, y);
   nHeuristic = abs(pTarget->nY - nY) + abs(pTarget->nX - nX);
 }
 
@@ -138,7 +138,7 @@ void Node::FillPathTo(Node *pTarget, int *pOutBuffer, const int nMapWidth) {
   return;
 }
 
-bool isCorner(const int nX, const int nY, const int nCornerX,
+bool IsCorner(const int nX, const int nY, const int nCornerX,
               const int nCornerY, const unsigned char *pMap,
               const int nMapWidth, const int nMapHeight) {
   if (nCornerX < 0 || nCornerY < 0 || nCornerX > nMapWidth - 1 ||
@@ -167,10 +167,10 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
       }
       int i = y * nMapWidth + x;
       if (pMap[i] == 0) continue;  // skip unavailable
-      if (isCorner(x, y, x - 1, y - 1, pMap, nMapWidth, nMapHeight) ||
-          isCorner(x, y, x + 1, y - 1, pMap, nMapWidth, nMapHeight) ||
-          isCorner(x, y, x + 1, y + 1, pMap, nMapWidth, nMapHeight) ||
-          isCorner(x, y, x - 1, y + 1, pMap, nMapWidth, nMapHeight)) {
+      if (IsCorner(x, y, x - 1, y - 1, pMap, nMapWidth, nMapHeight) ||
+          IsCorner(x, y, x + 1, y - 1, pMap, nMapWidth, nMapHeight) ||
+          IsCorner(x, y, x + 1, y + 1, pMap, nMapWidth, nMapHeight) ||
+          IsCorner(x, y, x - 1, y + 1, pMap, nMapWidth, nMapHeight)) {
         rgKeypoints.push_back(new Node(x, y, pTarget));
       }
     }
@@ -182,11 +182,11 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
   vector<thread> rgThreads(nMaxThreads);
   int nVerticesPerThread = rgKeypoints.size() / nMaxThreads;
   for (int i = 0; i < nMaxThreads - 1; i++) {
-    rgThreads[i] = thread(setEdges, pMap, nMapWidth, rgKeypoints,
-                          nVerticesPerThread * i, (i + 1) * nVerticesPerThread);
+    rgThreads[i] = thread(SetEdges, pMap, nMapWidth, rgKeypoints,
+                          i * nVerticesPerThread, (i + 1) * nVerticesPerThread);
   }
   rgThreads[nMaxThreads - 1] =
-      thread(setEdges, pMap, nMapWidth, rgKeypoints,
+      thread(SetEdges, pMap, nMapWidth, rgKeypoints,
              (nMaxThreads - 1) * nVerticesPerThread, rgKeypoints.size());
   for (int i = 0; i < nMaxThreads; i++) {
     rgThreads[i].join();
