@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <string>
 #include <thread>
+#include <mutex>
 using namespace std;
 
 class Node {
@@ -14,6 +15,7 @@ class Node {
  public:
   bool bClosed, bOpen;
   int nToStart, nTotal, nHeuristic;
+  mutex Mutex;
   Node *pPrevious;
   vector<Node *> rgNeighbors;
   vector<int> rgEdges;
@@ -28,15 +30,19 @@ class Node {
 };
 
 void SetEdges(const unsigned char *pMap, const int nMapWidth,
-              vector<Node *> *rgKeypoints, const int nFrom, const int nTo) {
+              vector<Node *> rgKeypoints, const int nFrom, const int nTo) {
   for (int i = nFrom; i < nTo; i++) {
-    Node *pFrom = (*rgKeypoints)[i];
-    for (int j = i + 1; j < rgKeypoints->size(); j++) {
-      Node *pTo = (*rgKeypoints)[j];
+    Node *pFrom = rgKeypoints[i];
+    for (int j = i + 1; j < rgKeypoints.size(); j++) {
+      Node *pTo = rgKeypoints[j];
       int nDistance = pFrom->GetDistance(pTo, pMap, nMapWidth);
       if (nDistance > 0) {
-        pTo->rgNeighbors.push_back(pFrom);
-        pTo->rgEdges.push_back(nDistance);
+        {
+          lock_guard<mutex> guardFrom(pTo->Mutex);
+          pTo->rgNeighbors.push_back(pFrom);
+          pTo->rgEdges.push_back(nDistance);
+        }
+        lock_guard<mutex> guardTo(pFrom->Mutex);
         pFrom->rgNeighbors.push_back(pTo);
         pFrom->rgEdges.push_back(nDistance);
       }
@@ -177,30 +183,27 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
     }
   }
   int nThreads = thread::hardware_concurrency();
-  /*
-  // min ~ 50 vertices per thread
   if (rgKeypoints.size() / 50 < nThreads) {
     nThreads = rgKeypoints.size() / 50 + 1;
   }
-  // always run at least one
   if (nThreads < 1) {
-    nThreads = 1;
+    // always run at least one
+    SetEdges(ref(pMap), nMapWidth, ref(rgKeypoints), 0, rgKeypoints.size());
+  } else {
+    vector<thread> rgThreads(nThreads);
+    int nVerticesPerThread = rgKeypoints.size() / nThreads;
+    for (int i = 0; i < nThreads - 1; i++) {
+      rgThreads[i] =
+          thread(SetEdges, pMap, nMapWidth, ref(rgKeypoints),
+                 i * nVerticesPerThread, (i + 1) * nVerticesPerThread);
+    }
+    rgThreads[nThreads - 1] =
+        thread(SetEdges, pMap, nMapWidth, ref(rgKeypoints),
+               (nThreads - 1) * nVerticesPerThread, rgKeypoints.size());
+    for (int i = 0; i < nThreads; i++) {
+      rgThreads[i].join();
+    }
   }
-  vector<thread> rgThreads(nThreads);
-  int nVerticesPerThread = rgKeypoints.size() / nThreads;
-  for (int i = 0; i < nThreads - 1; i++) {
-    rgThreads[i] = thread(SetEdges, pMap, nMapWidth, &rgKeypoints,
-                          i * nVerticesPerThread, (i + 1) * nVerticesPerThread);
-  }
-  rgThreads[nThreads - 1] =
-      thread(SetEdges, pMap, nMapWidth, &rgKeypoints,
-             (nThreads - 1) * nVerticesPerThread, rgKeypoints.size());
-  for (int i = 0; i < nThreads; i++) {
-    rgThreads[i].join();
-  }
-  */
-  thread t(SetEdges, pMap, nMapWidth, &rgKeypoints, 0, rgKeypoints.size());
-  t.join();
   // ida*
   vector<Node *> rgOpen;
   pStart->nToStart = 0;
