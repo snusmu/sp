@@ -3400,5 +3400,14 @@ int main() {
   };
   distance = FindPath(1, 6, 14, 2, pMap6, 16, 16, pOutBuffer, 50);
   printResults(distance, pOutBuffer, pMap6, 16, 16);
+  cout << "EXAMPLE 7\n";
+  unsigned char pMap7[] = {
+      1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1,
+      1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1,
+      0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+      0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  };
+  distance = FindPath(4, 0, 2, 9, pMap7, 9, 10, pOutBuffer, 100);
+  printResults(distance, pOutBuffer, pMap7, 9, 10);
   return 0;
 }

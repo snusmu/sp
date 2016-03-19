@@ -5,6 +5,7 @@
 #include <vector>
 #include <queue>
 #include <string>
+#include <thread>
 using namespace std;
 
 class Node {
@@ -12,7 +13,7 @@ class Node {
 
  public:
   bool bClosed, bOpen;
-  int nToStart, nToTarget, nHeuristic;
+  int nToStart, nTotal, nHeuristic;
   Node *pPrevious;
   vector<Node *> rgNeighbors;
   vector<int> rgEdges;
@@ -26,7 +27,27 @@ class Node {
   string ToString();
 };
 
+void setEdges(const unsigned char *pMap, const int nMapWidth,
+              vector<Node *> rgKeypoints, const int a, const int b) {
+  for (int i = a; i < b; i++) {
+    Node *pFrom = rgKeypoints[i];
+    for (int j = 0; j < rgKeypoints.size(); j++) {
+      if (j == i) continue;
+      Node *pTo = rgKeypoints[j];
+      int nDistance = pFrom->GetDistance(pTo, pMap, nMapWidth);
+      if (nDistance > 0) {
+        pFrom->rgNeighbors.push_back(pTo);
+        pFrom->rgEdges.push_back(nDistance);
+      }
+    }
+  }
+}
+
 string Node::ToString() { return to_string(nX) + "," + to_string(nY); }
+
+bool SortByDistanceToTarget(Node *pNode1, Node *pNode2) {
+  return ((pNode2->nTotal != -1) && (pNode1->nTotal > pNode2->nTotal));
+}
 
 string Node::GetPath() {
   if (pPrevious == NULL) {
@@ -37,8 +58,7 @@ string Node::GetPath() {
 
 struct ByDistanceToTarget {
   bool operator()(Node *pNode1, Node *pNode2) {
-    return ((pNode2->nToTarget != -1) &&
-            (pNode1->nToTarget > pNode2->nToTarget));
+    return ((pNode2->nTotal != -1) && (pNode1->nTotal > pNode2->nTotal));
   }
 };
 
@@ -46,7 +66,7 @@ void Node::init(const int x, const int y) {
   pPrevious = NULL;
   bClosed = false;
   bOpen = false;
-  nToTarget = -1;
+  nTotal = -1;
   nToStart = -1;
   nHeuristic = 0;
   nX = x;
@@ -155,46 +175,58 @@ int FindPath(const int nStartX, const int nStartY, const int nTargetX,
       }
     }
   }
+  int nMaxThreads = thread::hardware_concurrency();
+  if (rgKeypoints.size() / 50 < nMaxThreads) {
+    nMaxThreads = rgKeypoints.size() / 50 + 1;
+  }
+  vector<thread> rgThreads(nMaxThreads);
+  int nVerticesPerThread = rgKeypoints.size() / nMaxThreads;
+  for (int i = 0; i < nMaxThreads - 1; i++) {
+    rgThreads[i] = thread(setEdges, pMap, nMapWidth, rgKeypoints,
+                          nVerticesPerThread * i, (i + 1) * nVerticesPerThread);
+  }
+  rgThreads[nMaxThreads - 1] =
+      thread(setEdges, pMap, nMapWidth, rgKeypoints,
+             (nMaxThreads - 1) * nVerticesPerThread, rgKeypoints.size());
+  for (int i = 0; i < nMaxThreads; i++) {
+    rgThreads[i].join();
+  }
   // ida*
-  priority_queue<Node *, vector<Node *>, ByDistanceToTarget> rgOpen;
+  vector<Node *> rgOpen;
   pStart->nToStart = 0;
-  pStart->nToTarget = pStart->nHeuristic;
+  pStart->nTotal = pStart->nHeuristic;
   pStart->bOpen = true;
-  rgOpen.push(pStart);
-  int nToStart, nToCurrent, nToTarget;
+  rgOpen.push_back(pStart);
+  int nToStart, nToCurrent;
   while (rgOpen.size() > 0) {
-    Node *pCurrent = rgOpen.top();
+    sort(rgOpen.begin(), rgOpen.end(), SortByDistanceToTarget);
+    Node *pCurrent = rgOpen.back();
     if (pCurrent == pTarget) {
       pTarget->FillPathTo(pStart, pOutBuffer, nMapWidth);
       return pTarget->nToStart;
     }
-    rgOpen.pop();
+    rgOpen.pop_back();
     pCurrent->bOpen = false;
     pCurrent->bClosed = true;
-    for (int i = 0; i < rgKeypoints.size(); i++) {
-      Node *pNeighbor = rgKeypoints[i];
+    for (int i = 0; i < pCurrent->rgNeighbors.size(); i++) {
+      Node *pNeighbor = pCurrent->rgNeighbors[i];
       if (pNeighbor->bClosed) {
         continue;  // checked already
       }
-      nToCurrent = pCurrent->GetDistance(pNeighbor, pMap, nMapWidth);
-      if (nToCurrent == -1) {
-        continue;  // not a neighbour
-      }
-      nToStart = pCurrent->nToStart + nToCurrent;
-      nToTarget = nToStart + pNeighbor->nHeuristic;
-      if (nToTarget > nOutBufferSize) {
-        continue;  // dont close, we might encounter it again
-      }
+      nToStart = pCurrent->nToStart + pCurrent->rgEdges[i];
       if (pNeighbor->bOpen &&
           ((pNeighbor->nToStart == -1) || (nToStart >= pNeighbor->nToStart))) {
         continue;
       }
-      pNeighbor->nToTarget = nToTarget;
+      pNeighbor->nTotal = nToStart + pNeighbor->nHeuristic;
+      if (pNeighbor->nTotal > nOutBufferSize) {
+        continue;  // dont close, we might encounter it again
+      }
       pNeighbor->pPrevious = pCurrent;
       pNeighbor->nToStart = nToStart;
       if (!pNeighbor->bOpen) {
         pNeighbor->bOpen = true;
-        rgOpen.push(pNeighbor);
+        rgOpen.push_back(pNeighbor);
       }
     }
   }
